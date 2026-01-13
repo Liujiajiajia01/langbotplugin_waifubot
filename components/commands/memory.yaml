@@ -1,0 +1,22 @@
+name: memory
+description: 记忆管理命令
+subcommands:
+  - name: view
+    description: 查看用户记忆
+    handler: view_memory
+  - name: clear
+    description: 清除用户记忆
+    handler: clear_memory
+  - name: edit
+    description: 编辑记忆内容（管理员）
+    handler: edit_memory
+    args:
+      - name: user_id
+        type: string
+        description: 目标用户ID
+      - name: memory_id
+        type: string
+        description: 记忆ID
+      - name: content
+        type: string
+        description: 新的记忆内容

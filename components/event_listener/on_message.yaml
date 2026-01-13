@@ -1,0 +1,7 @@
+name: on_message
+description: 监听并处理用户消息
+events:
+  - type: FriendMessageReceived
+    handler: on_friend_message_received
+  - type: GroupMessageReceived
+    handler: on_group_message_received
