@@ -1,7 +1,9 @@
 import yaml
 import logging
 import os
-from typing import Dict, Any
+import glob
+import sys
+from typing import Dict, Any, List
 
 logger = logging.getLogger(__name__)
 
@@ -11,8 +13,12 @@ class ConfigManager:
         self.data = {}
         self.character_config_path = ""
         self.template_path = ""
+        
+        # 获取当前文件所在目录（cells/config.py）
+        self.current_dir = os.path.dirname(os.path.abspath(__file__))
+        logger.info(f"当前文件目录: {self.current_dir}")
 
-    async def load_config(self, character: str = "default", launcher_type: str = "person", completion: bool = True):
+    async def load_config(self, character: str = "cute_neko", launcher_type: str = "person", completion: bool = True):
         """
         加载配置文件
         :param character: 角色卡名称
@@ -20,20 +26,24 @@ class ConfigManager:
         :param completion: 是否完成配置
         """
         try:
-            self.character_config_path = f"config/cards/{character}"
-            self.template_path = f"templates/default_{launcher_type}"
-            
             # 获取插件配置
             plugin_config = self.plugin.get_config()
             
-            # 加载默认模板
-            default_config = await self._load_template()
+            # 移除不需要的配置项
+            if 'templates' in plugin_config:
+                del plugin_config['templates']
+            if 'character_cards' in plugin_config:
+                del plugin_config['character_cards']
             
-            # 加载角色卡配置
-            character_config = await self._load_character_config()
+            # 只加载角色卡配置，不再使用模板文件
+            character_data = {}
+            if character != "off":
+                character_file = os.path.join(self.current_dir, "..", "config", "cards", f"{character}.yaml")
+                logger.info(f"角色卡文件路径: {character_file}")
+                character_data = self._load_local_config_file(character_file)
             
-            # 合并配置
-            self.data = {**default_config, **character_config, **plugin_config}
+            # 合并配置：角色卡配置优先于插件配置
+            self.data = {**plugin_config, **character_data}
             
             # 如果需要完成配置，进行额外处理
             if completion:
@@ -44,33 +54,32 @@ class ConfigManager:
             
         except Exception as e:
             logger.error(f"加载配置失败: {e}", exc_info=True)
-            # 使用默认配置
-            self.data = await self._load_template()
-            return self.data
+            raise
     
-    async def _load_template(self) -> Dict[str, Any]:
+    def _load_local_config_file(self, file_path: str) -> Dict[str, Any]:
         """
-        加载默认模板
+        加载本地配置文件
+        :param file_path: 文件路径
+        :return: 配置数据
         """
-        try:
-            template_file = f"{self.template_path}.yaml"
-            file_bytes = await self.plugin.get_config_file(template_file)
-            return yaml.safe_load(file_bytes)
-        except Exception as e:
-            logger.error(f"加载模板失败: {e}")
-            return {}
-    
-    async def _load_character_config(self) -> Dict[str, Any]:
-        """
-        加载角色卡配置
-        """
-        try:
-            character_file = f"{self.character_config_path}.yaml"
-            file_bytes = await self.plugin.get_config_file(character_file)
-            return yaml.safe_load(file_bytes)
-        except Exception as e:
-            logger.error(f"加载角色卡配置失败: {e}")
-            return {}
+        # 检查文件是否存在
+        if not os.path.exists(file_path):
+            logger.error(f"文件不存在: {file_path}")
+            # 打印当前目录的文件结构
+            logger.info(f"当前目录结构:")
+            for item in os.listdir(self.current_dir):
+                logger.info(f"  {item}")
+            # 打印上级目录的文件结构
+            parent_dir = os.path.dirname(self.current_dir)
+            logger.info(f"上级目录结构:")
+            for item in os.listdir(parent_dir):
+                logger.info(f"  {item}")
+            raise FileNotFoundError(f"配置文件不存在: {file_path}")
+            
+        with open(file_path, "r", encoding="utf-8") as f:
+            config_data = yaml.safe_load(f)
+        logger.info(f"本地配置文件 {file_path} 加载成功")
+        return config_data
     
     async def _complete_config(self):
         """
@@ -101,10 +110,10 @@ class ConfigManager:
             "proactive_target_user_id": "off",
             "proactive_greeting_enabled": False,
             "proactive_greeting_probability": 50,
-            "proactive_min_inactive_hours": 3,
+            "proactive_min_inactive_minutes": 180,
             "proactive_do_not_disturb_start": "23:00",
             "proactive_do_not_disturb_end": "08:00",
-            "loop_time": 1800,
+            "loop_time": 60,
             "admin_ids": []
         }
         
@@ -131,3 +140,31 @@ class ConfigManager:
         获取配置项，支持默认值
         """
         return self.data.get(key, default)
+    
+    async def get_all_character_cards(self) -> List[str]:
+        """
+        获取所有可用的角色卡名称
+        """
+        try:
+            # 从插件配置中获取角色卡文件列表
+            plugin_config = self.plugin.get_config()
+            character_cards = plugin_config.get("character_cards", [])
+            
+            # 提取角色卡名称
+            character_names = []
+            for card_file in character_cards:
+                if isinstance(card_file, str) and card_file.endswith(".yaml"):
+                    # 从路径中提取角色卡名称
+                    character_name = os.path.basename(card_file).replace(".yaml", "")
+                    character_names.append(character_name)
+            
+            if not character_names:
+                # 如果没有获取到，返回默认的角色卡列表
+                character_names = ["cute_neko", "lively_assistant"]
+            
+            logger.info(f"可用的角色卡: {character_names}")
+            return character_names
+        except Exception as e:
+            logger.error(f"获取角色卡列表失败: {e}")
+            # 返回默认的角色卡列表
+            return ["cute_neko", "lively_assistant"]

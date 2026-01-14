@@ -14,16 +14,45 @@ metadata:
   icon: assets/icon.svg
 spec:
   config:
+    # API配置
+    - name: api_key
+      type: string
+      default: ""
+      label:
+        en_US: API Key
+        zh_Hans: API密钥
+      description:
+        en_US: API key for LLM model
+        zh_Hans: LLM模型的API密钥
+    # 角色卡配置
     # 通用设置
     - name: character
       type: string
-      default: "default"
+      default: "cute_neko"
       label:
-        en_US: Character Card
-        zh_Hans: 角色卡
+        en_US: Character Card (Private)
+        zh_Hans: 角色卡（私信）
       description:
-        en_US: Character card name, use "default" for default template, "off" to disable preset
-        zh_Hans: 角色卡名称，使用"default"时会使用默认模板，"off"时不使用角色预设
+        en_US: Character card name for private messages, use "default" for default template, "off" to disable preset
+        zh_Hans: 私信使用的角色卡名称，使用"default"时会使用默认模板，"off"时不使用角色预设
+    - name: group_character
+      type: string
+      default: "cute_neko"
+      label:
+        en_US: Character Card (Group)
+        zh_Hans: 角色卡（群聊）
+      description:
+        en_US: Character card name for group messages, use "default" for default template, "off" to disable preset
+        zh_Hans: 群聊使用的角色卡名称，使用"default"时会使用默认模板，"off"时不使用角色预设
+    - name: user_character_mappings
+      type: object
+      default: {}
+      label:
+        en_US: User Character Mappings
+        zh_Hans: 用户角色映射
+      description:
+        en_US: Map user IDs to specific character cards. Use JSON object format with {}.
+        zh_Hans: 将用户ID映射到特定的角色卡，使用JSON对象格式，注意用大括号{}。
     - name: summarization_mode
       type: boolean
       default: true
@@ -33,24 +62,6 @@ spec:
       description:
         en_US: Whether to enable long-term memory summarization
         zh_Hans: 是否开启长期记忆
-    - name: story_mode
-      type: boolean
-      default: false
-      label:
-        en_US: Story Mode
-        zh_Hans: 剧情模式
-      description:
-        en_US: Enable story mode (narration, status bar), private chat only
-        zh_Hans: 是否开启剧情模式（旁白、状态栏），仅私聊模式生效
-    - name: thinking_mode
-      type: boolean
-      default: false
-      label:
-        en_US: Thinking Mode
-        zh_Hans: 思维链模式
-      description:
-        en_US: Whether to enable thinking chain mode
-        zh_Hans: 是否开启思维链模式
     - name: personate_mode
       type: boolean
       default: true
@@ -60,15 +71,6 @@ spec:
       description:
         en_US: Enable personification (typing time, segmented reply)
         zh_Hans: 是否启用拟人化（打字时间、分段回复）
-    - name: jail_break_mode
-      type: string
-      default: "off"
-      label:
-        en_US: Jail Break Mode
-        zh_Hans: 破限模式
-      description:
-        en_US: "Jail break mode, options: off/before/after/end/all"
-        zh_Hans: "破限模式，可选值：off/before/after/end/all"
     - name: langbot_group_rule
       type: boolean
       default: false
@@ -79,7 +81,7 @@ spec:
         en_US: Whether to inherit LangBot's group message response rules
         zh_Hans: 是否继承LangBot的群消息响应规则
     - name: ignore_prefix
-      type: array[string]
+      type: array
       default: ["/"]
       label:
         en_US: Ignore Prefix
@@ -98,15 +100,7 @@ spec:
       description:
         en_US: Whether to enable scene analysis
         zh_Hans: 是否启用场景分析
-    - name: display_thinking
-      type: boolean
-      default: false
-      label:
-        en_US: Display Thinking
-        zh_Hans: 显示思考
-      description:
-        en_US: Whether to show inner thoughts
-        zh_Hans: 是否显示内心活动
+
     - name: analyze_max_conversations
       type: integer
       default: 9
@@ -202,7 +196,7 @@ spec:
         en_US: Group message merge waiting time (seconds)
         zh_Hans: 群聊消息合并等待时间（秒）
     - name: blacklist
-      type: array[string]
+      type: array
       default: []
       label:
         en_US: Blacklist
@@ -222,7 +216,7 @@ spec:
     
     # 拟人化设置
     - name: bracket_rate
-      type: array[number]
+      type: array
       default: [0.1, 0.1]
       label:
         en_US: Bracket Rate
@@ -240,7 +234,7 @@ spec:
         en_US: Interval for segmented replies (seconds), 0 for default (2 characters per second)
         zh_Hans: 分段回复的间隔（秒），0为默认间隔（两个字一秒）
     
-    # 私聊剧情模式
+    # 好感度设置
     - name: display_value
       type: boolean
       default: false
@@ -250,24 +244,6 @@ spec:
       description:
         en_US: Whether to display affection value after each reply
         zh_Hans: 是否每次回复后显示好感度数值
-    - name: max_narrat_words
-      type: integer
-      default: 30
-      label:
-        en_US: Max Narration Words
-        zh_Hans: 最大旁白字数
-      description:
-        en_US: Maximum number of words for narration
-        zh_Hans: 最大旁白字数
-    - name: narrat_max_conversations
-      type: integer
-      default: 8
-      label:
-        en_US: Max Narration Conversations
-        zh_Hans: 最大旁白对话数
-      description:
-        en_US: Maximum number of conversations used for narration
-        zh_Hans: 用于生成旁白的最大对话数量
     - name: value_game_max_conversations
       type: integer
       default: 5
@@ -277,15 +253,6 @@ spec:
       description:
         en_US: Maximum conversations used to determine affection change
         zh_Hans: 判定好感度变化时使用的最大对话数量
-    - name: intervals
-      type: array[integer]
-      default: []
-      label:
-        en_US: Auto Narration Intervals
-        zh_Hans: 自动旁白间隔
-      description:
-        en_US: Intervals to automatically trigger narration (seconds)
-        zh_Hans: 自动触发旁白推进剧情的时间间隔（秒）
     - name: person_response_delay
       type: integer
       default: 5
@@ -342,15 +309,15 @@ spec:
       description:
         en_US: Probability of triggering proactive greeting (0-100)
         zh_Hans: 触发主动发言的几率（0-100）
-    - name: proactive_min_inactive_hours
+    - name: proactive_min_inactive_minutes
       type: integer
-      default: 3
+      default: 180
       label:
-        en_US: Min Inactive Hours
-        zh_Hans: 最小不活跃小时数
+        en_US: Inactive Minutes
+        zh_Hans: 不活跃分钟数
       description:
-        en_US: Minimum hours of user inactivity
-        zh_Hans: 用户不活跃的最小小时数
+        en_US: Minimum minutes of user inactivity before sending proactive message
+        zh_Hans: 用户不活跃达到此时间后发送主动消息
     - name: proactive_do_not_disturb_start
       type: string
       default: "23:00"
@@ -371,7 +338,7 @@ spec:
         zh_Hans: "勿扰时间结束（格式：'xx:xx'）"
     - name: loop_time
       type: integer
-      default: 1800
+      default: 60
       label:
         en_US: Loop Time
         zh_Hans: 循环检查时间
@@ -381,7 +348,7 @@ spec:
     
     # 管理员设置
     - name: admin_ids
-      type: array[string]
+      type: array
       default: []
       label:
         en_US: Admin IDs
@@ -391,15 +358,15 @@ spec:
         zh_Hans: 管理员用户ID列表
   
   components:
-    - type: event_listener
-      name: on_message
-      file: components/event_listener/on_message.py
-    - type: command
-      name: affection
-      file: components/commands/affection.py
-    - type: command
-      name: memory
-      file: components/commands/memory.py
+    EventListener:
+      fromDirs:
+      - path: components/event_listener/
+    Command:
+      fromDirs:
+      - path: components/commands/
+  resources:
+    - path: config/
+    - path: templates/
 execution:
   python:
     path: main.py

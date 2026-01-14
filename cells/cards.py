@@ -1,6 +1,11 @@
 import logging
 import re
 from typing import Dict, List, Any
+import sys
+import os
+
+# 添加插件根目录到Python路径
+sys.path.append(os.path.dirname(os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))))
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +37,7 @@ class Cards:
             return
         self._has_preset = True
 
-        from .config import ConfigManager
+        from cells.config import ConfigManager
         config = ConfigManager(self.plugin)
         character_config = await config.load_config(
             character=character,
@@ -73,11 +78,19 @@ class Cards:
         """
         return self._skills
 
+    def get_profile(self, mode="person") -> List[str]:
+        """
+        获取角色简介
+        """
+        if mode == "group" and hasattr(self, '_profile_group') and self._profile_group:
+            return self._profile_group
+        return self._profile
+
     def get_background(self, mode="person") -> List[str]:
         """
         获取角色背景
         """
-        if mode == "group" and hasattr(self, '_background_group'):
+        if mode == "group" and hasattr(self, '_background_group') and self._background_group:
             return self._background_group
         return self._background
 
@@ -85,7 +98,7 @@ class Cards:
         """
         获取角色规则
         """
-        if mode == "group" and hasattr(self, '_rules_group'):
+        if mode == "group" and hasattr(self, '_rules_group') and self._rules_group:
             return self._rules_group
         return self._rules
 

@@ -1,6 +1,5 @@
 import logging
 import json
-import os
 from typing import Dict, Any
 
 logger = logging.getLogger(__name__)
@@ -10,20 +9,20 @@ class UserPortrait:
     def __init__(self, plugin):
         self.plugin = plugin
         self.user_data = {}
-        self.portrait_dir = os.path.join(plugin.get_plugin_data_dir(), "portraits")
-        os.makedirs(self.portrait_dir, exist_ok=True)
+        # 使用插件存储API而不是文件系统
+        self.portrait_prefix = "portrait_"
     
     async def load_user_portrait(self, user_id: str):
         """加载用户画像"""
-        file_path = os.path.join(self.portrait_dir, f"{user_id}.json")
-        if os.path.exists(file_path):
-            try:
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    self.user_data[user_id] = json.load(f)
-            except Exception as e:
-                logger.error(f"加载用户画像失败 {user_id}: {e}")
+        portrait_key = f"{self.portrait_prefix}{user_id}"
+        try:
+            portrait_data = await self.plugin.get_plugin_storage(portrait_key)
+            if portrait_data:
+                self.user_data[user_id] = json.loads(portrait_data.decode("utf-8"))
+            else:
                 self.user_data[user_id] = self._get_default_portrait()
-        else:
+        except Exception as e:
+            logger.error(f"加载用户画像失败 {user_id}: {e}")
             self.user_data[user_id] = self._get_default_portrait()
         
         return self.user_data[user_id]
@@ -31,10 +30,10 @@ class UserPortrait:
     async def save_user_portrait(self, user_id: str):
         """保存用户画像"""
         if user_id in self.user_data:
-            file_path = os.path.join(self.portrait_dir, f"{user_id}.json")
+            portrait_key = f"{self.portrait_prefix}{user_id}"
             try:
-                with open(file_path, 'w', encoding='utf-8') as f:
-                    json.dump(self.user_data[user_id], f, ensure_ascii=False, indent=2)
+                portrait_data = json.dumps(self.user_data[user_id]).encode("utf-8")
+                await self.plugin.set_plugin_storage(portrait_key, portrait_data)
             except Exception as e:
                 logger.error(f"保存用户画像失败 {user_id}: {e}")
     

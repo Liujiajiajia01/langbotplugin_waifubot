@@ -2,6 +2,11 @@ import json
 import re
 import logging
 from typing import Dict, Any
+import sys
+import os
+
+# 添加插件根目录到Python路径
+sys.path.append(os.path.dirname(os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))))
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +38,7 @@ class ValueGame:
         self._status_file = f"value_game_{character}_{launcher_id}"
 
         # 加载角色配置
-        from ..cells.config import ConfigManager
+        from cells.config import ConfigManager
         character_config_path = f"config/cards/{character}"
         self._config = ConfigManager(self.plugin)
         await self._config.load_config(character=character, launcher_type=launcher_type, completion=False)
@@ -47,9 +52,13 @@ class ValueGame:
                 logger.info(f"加载好感度值: {self._value}")
             else:
                 self._value = 0
+                # 如果存储不存在，初始化并保存
+                await self._save_value_to_status_file()
         except Exception as e:
             logger.error(f"加载好感度失败: {e}")
+            # 出错时初始化好感度
             self._value = 0
+            await self._save_value_to_status_file()
 
         # 获取好感度描述和最大变化值
         self._manner_descriptions = self._config.get("value_descriptions", [])
@@ -101,7 +110,7 @@ class ValueGame:
         change_amount = int(sentiment_score * self._max_manner_change)
 
         # 更新好感度
-        self.change_manner_value(change_amount)
+        await self.change_manner_value(change_amount)
         self._value_change = change_amount
 
     def get_manner_value_str(self) -> str:
@@ -110,16 +119,15 @@ class ValueGame:
         :return: 好感度字符串
         """
         value_change = self._value_change
-        if value_change is None:
-            return ""  # 非user发言以及未知的情况不添加该数值栏位
-            
+        
         value_change_str = ""
-        if value_change > 0:
-            value_change_str = f"+{value_change}"
-        elif value_change < 0:
-            value_change_str = f"{value_change}"
+        if value_change is not None:
+            if value_change > 0:
+                value_change_str = f"+{value_change}"
+            elif value_change < 0:
+                value_change_str = f"{value_change}"
             
-        content = f"【💕值：{self._value}】"
+        content = f"心动值：{self._value}"
         if value_change_str:
             content += f"（{value_change_str}）"
             
@@ -169,29 +177,29 @@ class ValueGame:
         else:
             return self._ensure_punctuation(content)
 
-    def change_manner_value(self, amount: int):
+    async def change_manner_value(self, amount: int):
         """
         改变好感度值
         :param amount: 变化量
         """
         self._value = max(0, min(10000, self._value + amount))
-        self._save_value_to_status_file()
+        await self._save_value_to_status_file()
         logger.info(f"好感度已更新: {self._value} (变化: {amount})")
 
-    def _save_value_to_status_file(self):
+    async def _save_value_to_status_file(self):
         """
         保存好感度值到存储
         """
         try:
             data = json.dumps({"value": self._value}).encode("utf-8")
-            self.plugin.set_plugin_storage(self._status_file, data)
+            await self.plugin.set_plugin_storage(self._status_file, data)
         except Exception as e:
             logger.error(f"保存好感度失败: {e}", exc_info=True)
 
-    def reset_value(self):
+    async def reset_value(self):
         """
         重置好感度值
         """
         self._value = 0
-        self._save_value_to_status_file()
+        await self._save_value_to_status_file()
         logger.info("好感度已重置")

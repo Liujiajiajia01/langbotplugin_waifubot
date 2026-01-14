@@ -1,6 +1,11 @@
 import logging
 import json
 from typing import Any
+import sys
+import os
+
+# 添加插件根目录到Python路径
+sys.path.append(os.path.dirname(os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))))
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +23,7 @@ class Narrator:
         """
         初始化旁白系统
         """
-        from ..cells.generator import Generator
+        from cells.generator import Generator
         self._generator = Generator(self.plugin)
 
     async def load_config(self):

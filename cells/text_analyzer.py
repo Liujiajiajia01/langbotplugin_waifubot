@@ -25,15 +25,22 @@ class TextAnalyzer:
             return TextAnalyzer.LOADED_DICTIONARIES[file]
 
         # 尝试从插件配置文件目录加载
-        config_path = f"config/{file}.yaml"
+        config_path = f"assets/config/{file}.yaml"
         try:
             # 使用LangBot的配置文件API加载
             file_bytes = await self.plugin.get_config_file(config_path)
             data = yaml.safe_load(file_bytes)
         except Exception as e:
-            logger.error(f"加载配置文件失败: {e}")
-            # 如果失败，使用默认值
-            data = {file: []}
+            logger.error(f"加载配置文件 {config_path} 失败: {e}")
+            # 尝试从不同路径加载
+            try:
+                config_path = f"config/{file}.yaml"
+                file_bytes = await self.plugin.get_config_file(config_path)
+                data = yaml.safe_load(file_bytes)
+            except Exception as e:
+                logger.error(f"尝试从 {config_path} 加载也失败: {e}")
+                # 如果都失败，使用默认值
+                data = {file: []}
 
         # 将加载的字典数据存入全局变量
         TextAnalyzer.LOADED_DICTIONARIES[file] = data
@@ -45,9 +52,15 @@ class TextAnalyzer:
         req_str = json.dumps(obj).encode()
 
         try:
-            r = requests.post(url, data=req_str)
+            r = requests.post(url, data=req_str, timeout=5)
             r.encoding = "utf-8"
+            if r.status_code != 200:
+                logger.error(f"TexSmart API返回错误状态码: {r.status_code}")
+                return {"error": f"API returned status code {r.status_code}"}
             return r.json()
+        except requests.Timeout:
+            logger.error("TexSmart API调用超时")
+            return {"error": "API timeout"}
         except requests.RequestException as e:
             logger.error(f"调用TexSmart API失败: {e}")
             return {"error": "Request failed"}
@@ -61,15 +74,30 @@ class TextAnalyzer:
     def _parse_texsmart_response(self, response):
         parsed_data = {"word_list": [], "phrase_list": [], "entity_list": []}
 
-        for word in response.get("word_list", []):
-            parsed_data["word_list"].append({"str": word["str"], "tag": word["tag"]})
+        # 如果API调用失败，返回空数据
+        if "error" in response:
+            return parsed_data
 
-        for phrase in response.get("phrase_list", []):
-            parsed_data["phrase_list"].append({"str": phrase["str"], "tag": phrase["tag"]})
+        try:
+            for word in response.get("word_list", []):
+                parsed_data["word_list"].append({"str": word["str"], "tag": word["tag"]})
 
-        for entity in response.get("entity_list", []):
-            entity_meaning = entity.get("meaning", {})
-            parsed_data["entity_list"].append({"str": entity["str"], "tag": entity["tag"], "i18n": entity["type"].get("i18n", ""), "related": entity_meaning.get("related", [])})
+            for phrase in response.get("phrase_list", []):
+                parsed_data["phrase_list"].append({"str": phrase["str"], "tag": phrase["tag"]})
+
+            for entity in response.get("entity_list", []):
+                entity_meaning = entity.get("meaning", {})
+                # 根据API文档，使用tag_i18n字段而不是type.i18n
+                parsed_data["entity_list"].append({
+                    "str": entity["str"], 
+                    "tag": entity.get("tag", ""), 
+                    "i18n": entity.get("tag_i18n", ""), 
+                    "related": entity_meaning.get("related", [])
+                })
+        except KeyError as e:
+            logger.error(f"解析TexSmart响应时缺少字段: {e}")
+        except Exception as e:
+            logger.error(f"解析TexSmart响应失败: {e}")
 
         return parsed_data
 
@@ -86,10 +114,16 @@ class TextAnalyzer:
         response = self._call_texsmart_api(text)
         parsed_data = self._parse_texsmart_response(response)
 
-        words = [w["str"] for w in parsed_data["word_list"]]  # 基础粒度分词
-        for entity in parsed_data["entity_list"]:
-            i18n_list.append(entity["i18n"])  # 实体类型标注
-            related_list.extend(entity["related"])  # 实体的语义联想
+        # 如果API调用失败，使用简单的分词方法
+        if not parsed_data["word_list"]:
+            logger.info("TexSmart API调用失败，使用简单分词")
+            # 使用简单的空格分词作为备选方案
+            words = text.split()
+        else:
+            words = [w["str"] for w in parsed_data["word_list"]]  # 基础粒度分词
+            for entity in parsed_data["entity_list"]:
+                i18n_list.append(entity["i18n"])  # 实体类型标注
+                related_list.extend(entity["related"])  # 实体的语义联想
 
         words = self._remove_punctuation(words)  # 删除标点符号项目
         words = self._remove_unless_words(words)  # 删除无意义标签
@@ -118,7 +152,14 @@ class TextAnalyzer:
 
         response = self._call_texsmart_api(text)
         parsed_data = self._parse_texsmart_response(response)
-        words = [w["str"] for w in parsed_data["phrase_list"]]
+
+        # 如果API调用失败或没有获取到短语列表，使用简单的分词方法
+        if not parsed_data["phrase_list"]:
+            logger.info("TexSmart API调用失败或没有短语列表，使用简单分词")
+            # 使用简单的空格分词作为备选方案
+            words = text.split()
+        else:
+            words = [w["str"] for w in parsed_data["phrase_list"]]
 
         # 移除分词中标点符号项目
         words = self._remove_punctuation(words)

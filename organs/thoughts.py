@@ -1,5 +1,10 @@
 import logging
 from typing import Optional, Tuple
+import sys
+import os
+
+# 添加插件根目录到Python路径
+sys.path.append(os.path.dirname(os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))))
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +19,7 @@ class Thoughts:
         """
         初始化思维系统
         """
-        from ..cells.generator import Generator
+        from cells.generator import Generator
         self._generator = Generator(self.plugin)
 
     async def _analyze_person_conversations(self, memory, profile: str, background: str, manner: str) -> str:
@@ -38,6 +43,9 @@ class Thoughts:
         last_content = last_message.get('content', '')
         last_speaker = last_message.get('speaker', '')
         
+        # 获取最大思考字数配置
+        max_thinking_words = self.plugin.get_config().get("max_thinking_words", 30)
+        
         # 构建分析提示
         user_prompt = f"分析用户说的话：'{last_content}'，站在助手的角度思考用户的意图。"
         if profile:
@@ -46,7 +54,7 @@ class Thoughts:
             user_prompt += f" 背景信息：{background}"
         if manner:
             user_prompt += f" 行为准则：{manner}"
-        user_prompt += f" 分析结果要简明扼要，不超过30个字。"
+        user_prompt += f" 分析结果要简明扼要，不超过{max_thinking_words}个字。"
         
         # 调用生成器生成分析结果
         analysis_result = await self._generator.generate_response(user_prompt)
@@ -66,14 +74,30 @@ class Thoughts:
         if not conversations:
             return "", ""
             
-        # 获取最近的对话内容
-        recent_conversations = conversations[-5:]  # 最近5条消息
+        # 获取最近的对话内容（使用更多的短期记忆）
+        recent_conversations = conversations[-10:]  # 最近10条消息
         conversation_str = "\n".join([f"{msg['speaker']}: {msg['content']}" for msg in recent_conversations])
         
+        # 获取最后一条用户消息作为查询，检索相关的长期记忆
+        last_user_message = ""
+        for msg in reversed(conversations):
+            if msg['speaker'] == 'user':
+                last_user_message = msg['content']
+                break
+        
+        # 检索相关的长期记忆
+        if last_user_message and hasattr(memory, 'retrieve_related_memories'):
+            related_memories = await memory.retrieve_related_memories(last_user_message)
+            if related_memories:
+                # 添加相关的长期记忆到对话历史
+                conversation_str += "\n\n相关记忆："
+                for mem in related_memories[:5]:  # 最多添加5条相关记忆
+                    conversation_str += f"\n- {mem['content']}"
+        
         # 获取角色信息
-        profile = " ".join(card.get_profile())
-        background = " ".join(card.get_background())
-        manner = " ".join(card.get_rules())
+        profile = " ".join(card.get_profile(mode="person"))
+        background = " ".join(card.get_background(mode="person"))
+        manner = " ".join(card.get_rules(mode="person"))
         
         # 生成分析
         analysis = ""
@@ -110,9 +134,9 @@ class Thoughts:
         conversation_str = "\n".join([f"{msg['speaker']}: {msg['content']}" for msg in recent_conversations])
         
         # 获取角色信息
-        profile = " ".join(card.get_profile())
-        background = " ".join(card.get_background())
-        manner = " ".join(card.get_rules())
+        profile = " ".join(card.get_profile(mode="group"))
+        background = " ".join(card.get_background(mode="group"))
+        manner = " ".join(card.get_rules(mode="group"))
         
         # 构建群聊提示
         prompt = f"角色设定：{profile} {background}\n"

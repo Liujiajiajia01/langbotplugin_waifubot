@@ -1,5 +1,5 @@
 import logging
-from langbot_plugin.api import BasePlugin
+from langbot_plugin.api.definition.plugin import BasePlugin
 
 logger = logging.getLogger(__name__)
 
@@ -17,8 +17,9 @@ class WaifuBotPlugin(BasePlugin):
         self.cards = None
         self.narrator = None
         self.portrait = None
+        self.current_bot_uuid = None  # 保存当前机器人的UUID
         
-    async def on_load(self):
+    async def initialize(self):
         """插件加载时调用"""
         logger.info("WaifuBot插件加载中...")
         
@@ -28,16 +29,20 @@ class WaifuBotPlugin(BasePlugin):
         
         # 初始化各个模块
         try:
-            from .cells.text_analyzer import TextAnalyzer
-            from .cells.config import ConfigManager
-            from .cells.generator import Generator
-            from .cells.cards import Cards
-            from .organs.memories import Memory
-            from .organs.thoughts import Thoughts
-            from .organs.proactive import ProactiveGreeter
-            from .organs.portrait import UserPortrait
-            from .systems.value_game import ValueGame
-            from .systems.narrator import Narrator
+            import sys
+            import os
+            sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+            
+            from cells.text_analyzer import TextAnalyzer
+            from cells.config import ConfigManager
+            from cells.generator import Generator
+            from cells.cards import Cards
+            from organs.memories import Memory
+            from organs.thoughts import Thoughts
+            from organs.proactive import ProactiveGreeter
+            from organs.portrait import UserPortrait
+            from systems.value_game import ValueGame
+            from systems.narrator import Narrator
             
             self.text_analyzer = TextAnalyzer(self)
             self.config_manager = ConfigManager(self)
@@ -54,37 +59,23 @@ class WaifuBotPlugin(BasePlugin):
             self.portrait = UserPortrait(self)
             
             logger.info("所有模块初始化完成")
-            
+        
             # 启动主动交互系统
             await self.proactive.load_config(self.memories)
             await self.proactive.start()
             
+            logger.info("WaifuBot插件加载完成！")
+            
         except Exception as e:
             logger.error(f"模块初始化失败: {e}", exc_info=True)
             raise
-        
-        logger.info("WaifuBot插件加载完成！")
     
-    async def on_unload(self):
+    def __del__(self):
         """插件卸载时调用"""
         logger.info("WaifuBot插件卸载中...")
         
-        # 停止主动交互系统
-        try:
-            await self.proactive.stop()
-            logger.info("主动交互系统已停止")
-        except Exception as e:
-            logger.error(f"停止主动交互系统失败: {e}", exc_info=True)
-        
-        # 保存数据
-        try:
-            if hasattr(self.memories, 'save_long_term_memories'):
-                await self.memories.save_long_term_memories()
-            if hasattr(self.value_game, '_save_value_to_status_file'):
-                self.value_game._save_value_to_status_file()
-            logger.info("数据保存完成")
-        except Exception as e:
-            logger.error(f"数据保存失败: {e}", exc_info=True)
+        # 注意：__del__方法不能调用异步方法，数据已在正常操作中保存
+        logger.info("数据保存已在正常操作中完成")
         
         logger.info("WaifuBot插件卸载完成！")
 
