@@ -182,7 +182,7 @@ class Generator:
                     logger.error("获取到的LLM模型列表格式错误")
                     return "抱歉，我现在无法生成回复。"
             
-            # 添加回复长度限制的系统提示
+            # 添加系统提示，明确限制回复长度
             system_content = "你是一个有情感的聊天机器人，用自然、友好的语言回复用户。"
             system_content += "回复要简洁，一般情况下不超过50个汉字。"
             system_content += "只有在非常激动、非常开心，或者非常难受、非常难过的情况下，可以到达100个汉字。"
@@ -220,34 +220,8 @@ class Generator:
             if '<think>' in result and '</think>' in result:
                 result = result.split('</think>')[-1].strip()
             
-            # 检查是否有情感分析结果来决定长度限制
-            emotion_score = getattr(self.plugin.memories, 'current_emotion_score', 0.0)
-            emotion_type = getattr(self.plugin.memories, 'current_emotion_type', 'neutral')
-            
-            # 默认限制50个汉字，极端情感时限制100个汉字
-            max_chars = 50
-            if emotion_type in ['positive', 'negative'] and abs(emotion_score) > 0.7:
-                max_chars = 100
-            
-            # 计算汉字数量（假设每个中文汉字占3字节）
-            import re
-            chinese_chars = re.findall(r'[\u4e00-\u9fa5]', result)
-            chinese_count = len(chinese_chars)
-            
-            # 如果超出限制，截断回复
-            if chinese_count > max_chars:
-                # 找到第max_chars个汉字的位置
-                count = 0
-                truncate_pos = 0
-                for i, char in enumerate(result):
-                    if '\u4e00' <= char <= '\u9fa5':
-                        count += 1
-                        if count == max_chars:
-                            truncate_pos = i + 1
-                            break
-                
-                # 截断并添加省略号
-                result = result[:truncate_pos] + "..."
+            # 不再截断回复，使用系统提示限制LLM生成的回复长度
+            # 保留完整的回复内容发送给用户
             
             return result
             

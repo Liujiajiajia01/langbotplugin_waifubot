@@ -33,8 +33,8 @@ class OnMessageEventListener(EventListener):
 
                 # 获取用户信息
                 user_id = str(ctx.event.sender_id)
-                # 用户名称可能需要通过其他方式获取，暂时使用用户ID作为名称
-                user_name = f"用户{user_id}"
+                # 用户名称使用用户ID，确保群聊记忆中包含用户的实际ID
+                user_name = user_id
 
                 # 获取插件实例
                 plugin = self.plugin
@@ -92,8 +92,6 @@ class OnMessageEventListener(EventListener):
                 response_content = response.split("\n")[0]  # 只保存第一行作为记忆
                 await plugin.memories.add_short_term_memory("bot", response_content)
 
-
-
                 # 如果开启了好感度显示，显示当前好感度
                 if plugin.get_config().get("display_value", False):
                     from systems.value_game import ValueGame
@@ -136,48 +134,7 @@ class OnMessageEventListener(EventListener):
                         Plain(text="抱歉，我现在无法回复你的消息。")
                     ])
                 )
-
-    async def send_with_typing_effect(self, ctx, message: str, delay: float = 0.05):
-        """
-        实现打字机效果，分段发送消息
-        :param ctx: 事件上下文
-        :param message: 要发送的消息
-        :param delay: 每个字符的延迟时间（秒）
-        """
-        import asyncio
-        import re
         
-        # 将消息按句号、叹号、问号、分号、冒号、换行分段，逗号不分段
-        segments = re.split(r'([。！？；：\n])', message)
-        
-        # 重组段落，确保标点符号和内容在一起
-        combined_segments = []
-        i = 0
-        while i < len(segments):
-            if i + 1 < len(segments):
-                # 将内容和标点符号合并
-                combined_segments.append(segments[i] + segments[i+1])
-                i += 2
-            else:
-                # 处理最后一个单独的内容片段
-                combined_segments.append(segments[i])
-                i += 1
-        
-        # 过滤掉空段落
-        combined_segments = [seg for seg in combined_segments if seg.strip()]
-        
-        # 逐个发送段落，每次只发送当前片段
-        for segment in combined_segments:
-            if segment.strip():
-                # 等待一段时间模拟打字效果
-                await asyncio.sleep(delay * len(segment))
-                # 只发送当前片段
-                await ctx.reply(
-                    MessageChain([
-                        Plain(text=segment)
-                    ])
-                )
-
         @self.handler(events.GroupNormalMessageReceived)
         async def on_group_message_received(ctx: context.EventContext):
             """处理群聊消息"""
@@ -194,25 +151,29 @@ class OnMessageEventListener(EventListener):
                 logger.info(f"群聊事件对象: {ctx.event}")
                 logger.info(f"群聊事件对象属性: {dir(ctx.event)}")
                 
-                # 获取群聊信息，尝试不同的属性名称
-                group_id = None
+                # 获取群聊信息
                 user_id = str(ctx.event.sender_id)
                 
-                # 尝试获取群聊ID
-                if hasattr(ctx.event, 'group_id'):
-                    group_id = str(ctx.event.group_id)
-                    logger.info(f"使用group_id: {group_id}")
-                elif hasattr(ctx.event, 'target_id'):
-                    group_id = str(ctx.event.target_id)
-                    logger.info(f"使用target_id作为group_id: {group_id}")
-                elif hasattr(ctx.event, 'channel_id'):
-                    group_id = str(ctx.event.channel_id)
-                    logger.info(f"使用channel_id作为group_id: {group_id}")
+                # 使用launcher_id作为群聊ID（从日志中看到这个属性包含了群聊ID）
+                if hasattr(ctx.event, 'launcher_id'):
+                    group_id = str(ctx.event.launcher_id)
+                    logger.info(f"使用launcher_id作为group_id: {group_id}")
                 else:
-                    # 如果都没有，尝试从事件对象中提取
-                    logger.error("无法找到群聊ID属性")
-                    # 尝试作为临时解决方案，使用一个默认值
-                    group_id = "default_group"
+                    # 如果没有，尝试其他可能的属性
+                    group_id = None
+                    if hasattr(ctx.event, 'group_id'):
+                        group_id = str(ctx.event.group_id)
+                        logger.info(f"使用group_id: {group_id}")
+                    elif hasattr(ctx.event, 'target_id'):
+                        group_id = str(ctx.event.target_id)
+                        logger.info(f"使用target_id作为group_id: {group_id}")
+                    elif hasattr(ctx.event, 'channel_id'):
+                        group_id = str(ctx.event.channel_id)
+                        logger.info(f"使用channel_id作为group_id: {group_id}")
+                    else:
+                        # 尝试作为临时解决方案，使用一个默认值
+                        group_id = "default_group"
+                        logger.warning(f"无法找到群聊ID属性，使用默认值: {group_id}")
                 # 用户名称可能需要通过其他方式获取，暂时使用用户ID作为名称
                 user_name = f"用户{user_id}"
 
@@ -253,7 +214,7 @@ class OnMessageEventListener(EventListener):
                 logger.info(f"群聊角色卡加载完成，角色信息：profile={plugin.cards.get_profile(mode='group')}, background={plugin.cards.get_background(mode='group')}, rules={plugin.cards.get_rules(mode='group')}")
                 logger.info(f"角色卡配置: 用户名称={plugin.cards.get_user_name()}, 助手名称={plugin.cards.get_assistant_name()}")
 
-                # 添加用户消息到短期记忆
+                # 添加用户消息到短期记忆，使用用户ID作为发言者名称
                 await plugin.memories.add_short_term_memory(user_name, text)
 
                 # 生成思维分析
@@ -264,14 +225,14 @@ class OnMessageEventListener(EventListener):
                 # 生成回复
                 response = await plugin.generator.generate_response(prompt)
 
-                # 应用拟人化效果（群聊版本，更公开得体）
-                response = await plugin.generator.apply_personification(response, mode="group")
+                # 应用拟人化效果
+                response = await plugin.generator.apply_personification(response)
 
                 # 实现打字机效果，分段发送消息
                 await self.send_with_typing_effect(ctx, response)
 
                 # 添加机器人回复到短期记忆
-                await plugin.memories.add_short_term_memory("bot", response)
+                await plugin.memories.add_short_term_memory(plugin.cards.get_assistant_name(), response)
 
                 # 如果开启了好感度显示，显示当前好感度
                 if plugin.get_config().get("display_value", False):
@@ -308,6 +269,47 @@ class OnMessageEventListener(EventListener):
                 await ctx.reply(
                     MessageChain([
                         Plain(text="抱歉，我现在无法回复消息。")
+                    ])
+                )
+
+    async def send_with_typing_effect(self, ctx, message: str, delay: float = 0.05):
+        """
+        实现打字机效果，分段发送消息
+        :param ctx: 事件上下文
+        :param message: 要发送的消息
+        :param delay: 每个字符的延迟时间（秒）
+        """
+        import asyncio
+        import re
+        
+        # 将消息按句号、叹号、问号这三种标点符号分段，确保标点符号与内容在一起
+        segments = re.split(r'([。！？])', message)
+        
+        # 重组段落，确保标点符号和内容在一起
+        combined_segments = []
+        i = 0
+        while i < len(segments):
+            if i + 1 < len(segments):
+                # 将内容和标点符号合并
+                combined_segments.append(segments[i] + segments[i+1])
+                i += 2
+            else:
+                # 处理最后一个单独的内容片段
+                combined_segments.append(segments[i])
+                i += 1
+        
+        # 过滤掉空段落
+        combined_segments = [seg for seg in combined_segments if seg.strip()]
+        
+        # 逐个发送段落，每次只发送当前片段
+        for segment in combined_segments:
+            if segment.strip():
+                # 等待一段时间模拟打字效果
+                await asyncio.sleep(delay * len(segment))
+                # 只发送当前片段
+                await ctx.reply(
+                    MessageChain([
+                        Plain(text=segment)
                     ])
                 )
 
