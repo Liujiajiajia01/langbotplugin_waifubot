@@ -53,33 +53,6 @@ spec:
       description:
         en_US: Map user IDs to specific character cards. Use JSON object format with {}.
         zh_Hans: 将用户ID映射到特定的角色卡，使用JSON对象格式，注意用大括号{}。
-    - name: summarization_mode
-      type: boolean
-      default: true
-      label:
-        en_US: Long-term Memory
-        zh_Hans: 长期记忆
-      description:
-        en_US: Whether to enable long-term memory summarization
-        zh_Hans: 是否开启长期记忆
-    - name: personate_mode
-      type: boolean
-      default: true
-      label:
-        en_US: Personification Mode
-        zh_Hans: 拟人化模式
-      description:
-        en_US: Enable personification (typing time, segmented reply)
-        zh_Hans: 是否启用拟人化（打字时间、分段回复）
-    - name: langbot_group_rule
-      type: boolean
-      default: false
-      label:
-        en_US: LangBot Group Rule
-        zh_Hans: LangBot群规则
-      description:
-        en_US: Whether to inherit LangBot's group message response rules
-        zh_Hans: 是否继承LangBot的群消息响应规则
     - name: ignore_prefix
       type: array
       default: ["/"]
@@ -91,16 +64,6 @@ spec:
         zh_Hans: 忽略的消息前缀列表
     
     # 思考模块
-    - name: conversation_analysis
-      type: boolean
-      default: true
-      label:
-        en_US: Conversation Analysis
-        zh_Hans: 对话分析
-      description:
-        en_US: Whether to enable scene analysis
-        zh_Hans: 是否启用场景分析
-
     - name: analyze_max_conversations
       type: integer
       default: 9
@@ -168,42 +131,6 @@ spec:
         zh_Hans: 每段长期记忆的最大标签数量
     
     # 群聊设置
-    - name: response_min_conversations
-      type: integer
-      default: 1
-      label:
-        en_US: Min Response Conversations
-        zh_Hans: 最小回复对话数
-      description:
-        en_US: Minimum number of conversations to trigger group reply
-        zh_Hans: 群聊触发回复的最小对话数量
-    - name: response_rate
-      type: number
-      default: 1.0
-      label:
-        en_US: Response Rate
-        zh_Hans: 回复概率
-      description:
-        en_US: Probability of replying after reaching minimum conversations (0-1)
-        zh_Hans: 群聊触达到最小对话数量后回复的机率（0-1）
-    - name: group_response_delay
-      type: integer
-      default: 0
-      label:
-        en_US: Group Response Delay
-        zh_Hans: 群聊回复延迟
-      description:
-        en_US: Group message merge waiting time (seconds)
-        zh_Hans: 群聊消息合并等待时间（秒）
-    - name: blacklist
-      type: array
-      default: []
-      label:
-        en_US: Blacklist
-        zh_Hans: 黑名单
-      description:
-        en_US: Group blacklist, automatically filter messages from listed users
-        zh_Hans: 群聊黑名单，自动过滤来自列表中用户的消息
     - name: repeat_trigger
       type: integer
       default: 2
@@ -224,15 +151,6 @@ spec:
       description:
         en_US: Probability of adding brackets at the end of reply
         zh_Hans: 回复末尾加括号的机率
-    - name: personate_delay
-      type: integer
-      default: 0
-      label:
-        en_US: Personate Delay
-        zh_Hans: 分段回复间隔
-      description:
-        en_US: Interval for segmented replies (seconds), 0 for default (2 characters per second)
-        zh_Hans: 分段回复的间隔（秒），0为默认间隔（两个字一秒）
     
     # 好感度设置
     - name: display_value
@@ -244,42 +162,6 @@ spec:
       description:
         en_US: Whether to display affection value after each reply
         zh_Hans: 是否每次回复后显示好感度数值
-    - name: value_game_max_conversations
-      type: integer
-      default: 5
-      label:
-        en_US: Max Affection Analysis Conversations
-        zh_Hans: 最大好感度分析对话数
-      description:
-        en_US: Maximum conversations used to determine affection change
-        zh_Hans: 判定好感度变化时使用的最大对话数量
-    - name: person_response_delay
-      type: integer
-      default: 5
-      label:
-        en_US: Private Response Delay
-        zh_Hans: 私聊回复延迟
-      description:
-        en_US: Private message merge waiting time (seconds)
-        zh_Hans: 私聊消息合并等待时间（秒）
-    - name: continued_rate
-      type: number
-      default: 0.0
-      label:
-        en_US: Continued Speech Rate
-        zh_Hans: 延续发言概率
-      description:
-        en_US: Probability of continuing speech after automatic reply (0-1)
-        zh_Hans: 自动触发回复后继续发言的机率（0-1）
-    - name: continued_max_count
-      type: integer
-      default: 2
-      label:
-        en_US: Max Continued Speech Count
-        zh_Hans: 最大延续发言次数
-      description:
-        en_US: Maximum number of continued speeches in private chat
-        zh_Hans: 私聊最大延续发言次数
     
     # 主动发言模式
     - name: proactive_target_user_id

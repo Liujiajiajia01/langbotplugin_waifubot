@@ -27,13 +27,15 @@ class ConfigManager:
         """
         try:
             # 获取插件配置
-            plugin_config = self.plugin.get_config()
+            plugin_config = self.plugin.get_config().copy()
             
             # 移除不需要的配置项
             if 'templates' in plugin_config:
                 del plugin_config['templates']
             if 'character_cards' in plugin_config:
                 del plugin_config['character_cards']
+            if 'langbot_group_rule' in plugin_config:
+                del plugin_config['langbot_group_rule']
             
             # 只加载角色卡配置，不再使用模板文件
             character_data = {}
@@ -49,7 +51,8 @@ class ConfigManager:
             if completion:
                 await self._complete_config()
             
-            logger.info(f"配置加载完成: {self.data}")
+            safe_keys = [k for k in self.data.keys() if k != "api_key"]
+            logger.info(f"配置加载完成: keys={safe_keys}")
             return self.data
             
         except Exception as e:
@@ -92,21 +95,12 @@ class ConfigManager:
             "recall_once": 3,
             "session_memories_size": 6,
             "summary_max_tags": 30,
-            "response_min_conversations": 1,
-            "response_rate": 1.0,
-            "group_response_delay": 0,
-            "blacklist": [],
             "repeat_trigger": 2,
             "bracket_rate": [0.1, 0.1],
-            "personate_delay": 0,
             "display_value": False,
             "max_narrat_words": 30,
             "narrat_max_conversations": 8,
-            "value_game_max_conversations": 5,
             "intervals": [],
-            "person_response_delay": 5,
-            "continued_rate": 0.0,
-            "continued_max_count": 2,
             "proactive_target_user_id": "off",
             "proactive_greeting_enabled": False,
             "proactive_greeting_probability": 50,

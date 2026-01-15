@@ -10,6 +10,85 @@ class OnMessageEventListener(EventListener):
         super().__init__()
         self.group_blacklist = set()
         self.repeat_messages = {}
+
+        def _safe_get(obj, attr: str):
+            try:
+                return getattr(obj, attr)
+            except Exception:
+                return None
+
+        def _get_sender_display_name(event, fallback: str) -> str:
+            candidates = [
+                "sender_name",
+                "sender_nickname",
+                "nickname",
+                "display_name",
+                "member_name",
+                "name",
+            ]
+            for key in candidates:
+                val = _safe_get(event, key)
+                if isinstance(val, str) and val.strip():
+                    return val.strip()
+            sender = _safe_get(event, "sender")
+            if sender is not None:
+                for key in ["nickname", "display_name", "name", "username"]:
+                    val = _safe_get(sender, key)
+                    if isinstance(val, str) and val.strip():
+                        return val.strip()
+            return fallback
+
+        def _get_bot_platform_id(event, fallback: str) -> str:
+            candidates = []
+            for key in [
+                "self_id",
+                "bot_id",
+                "bot_user_id",
+                "bot_uid",
+                "bot_uin",
+                "receiver_id",
+                "bot_account_id",
+                "target_id",
+            ]:
+                val = _safe_get(event, key)
+                if val is not None and str(val).strip():
+                    candidates.append(str(val).strip())
+            for c in candidates:
+                if c.startswith("ou_"):
+                    return c
+            for c in candidates:
+                return c
+            return fallback
+
+        def _extract_plain_text(message_chain) -> str:
+            parts = []
+            for elem in message_chain:
+                if hasattr(elem, "text") and isinstance(elem.text, str):
+                    parts.append(elem.text)
+                else:
+                    name = elem.__class__.__name__.lower()
+                    if "at" in name or "mention" in name or hasattr(elem, "target") or hasattr(elem, "targets"):
+                        display = _safe_get(elem, "display")
+                        if isinstance(display, str) and display.strip():
+                            if display.startswith("@"):
+                                parts.append(display)
+                            else:
+                                parts.append(f"@{display}")
+                        else:
+                            parts.append("@")
+            return "".join(parts)
+
+        def _strip_heart_suffix(text: str) -> str:
+            import re
+            if not isinstance(text, str):
+                return ""
+            return re.sub(r"（-?\d+(?:❤️|🖤)）\s*$", "", text)
+
+        def _strip_heart_markers(text: str) -> str:
+            import re
+            if not isinstance(text, str):
+                return ""
+            return re.sub(r"（-?\d+(?:❤️|🖤)）", "", text)
         
         @self.handler(events.PersonNormalMessageReceived)
         async def on_person_message_received(ctx: context.EventContext):
@@ -39,83 +118,72 @@ class OnMessageEventListener(EventListener):
                 # 获取插件实例
                 plugin = self.plugin
 
-                # 初始化记忆系统
-                if not hasattr(plugin.memories, 'user_id') or plugin.memories.user_id != user_id:
-                    await plugin.memories.initialize(user_name, "Waifu", user_id)
+                async with plugin._memory_lock:
+                    # 初始化记忆系统
+                    if not hasattr(plugin.memories, 'user_id') or plugin.memories.user_id != user_id:
+                        await plugin.memories.initialize(user_name, "Waifu", user_id)
 
-                # 加载角色卡（支持按用户ID配置）
-                # 获取默认角色卡
-                default_character = plugin.get_config().get("character", "cute_neko")
-                
-                # 获取用户角色映射
-                user_character_mappings = plugin.get_config().get("user_character_mappings", {})
-                
-                # 确保用户角色映射是字典类型
-                if not isinstance(user_character_mappings, dict):
-                    # 尝试将字符串解析为JSON字典
-                    try:
-                        import json
-                        user_character_mappings = json.loads(user_character_mappings)
-                        logger.info(f"成功将user_character_mappings字符串解析为字典: {user_character_mappings}")
-                    except (json.JSONDecodeError, TypeError) as e:
-                        logger.warning(f"user_character_mappings 不是字典类型且解析失败，使用默认角色卡: {default_character}, 错误: {e}")
+                    # 加载角色卡（支持按用户ID配置）
+                    # 获取默认角色卡
+                    default_character = plugin.get_config().get("character", "cute_neko")
+                    
+                    # 获取用户角色映射
+                    user_character_mappings = plugin.get_config().get("user_character_mappings", {})
+                    
+                    # 确保用户角色映射是字典类型
+                    if not isinstance(user_character_mappings, dict):
+                        # 尝试将字符串解析为JSON字典
+                        try:
+                            import json
+                            user_character_mappings = json.loads(user_character_mappings)
+                            logger.info(f"成功将user_character_mappings字符串解析为字典: {user_character_mappings}")
+                        except (json.JSONDecodeError, TypeError) as e:
+                            logger.warning(f"user_character_mappings 不是字典类型且解析失败，使用默认角色卡: {default_character}, 错误: {e}")
+                            character = default_character
+                            user_character_mappings = {}
+                    
+                    # 根据用户ID选择角色卡
+                    if isinstance(user_character_mappings, dict):
+                        character = user_character_mappings.get(user_id, default_character)
+                    else:
                         character = default_character
-                        user_character_mappings = {}
-                
-                # 根据用户ID选择角色卡
-                if isinstance(user_character_mappings, dict):
-                    character = user_character_mappings.get(user_id, default_character)
-                else:
-                    character = default_character
-                
-                logger.info(f"用户 {user_id} 使用角色卡: {character}")
-                await plugin.cards.load_config(character, "person")
+                    
+                    logger.info(f"用户 {user_id} 使用角色卡: {character}")
+                    await plugin.cards.load_config(character, "person")
 
-                # 添加短期记忆
-                await plugin.memories.add_short_term_memory("user", text)
+                    # 添加短期记忆
+                    await plugin.memories.add_short_term_memory("user", text)
 
-                # 生成思维分析
-                prompt, analysis = await plugin.thoughts.generate_person_prompt(
-                    plugin.memories, plugin.cards
-                )
+                    from systems.value_game import ValueGame
+                    value_game = ValueGame(plugin)
+                    await value_game.load_config(character, user_id, "person")
+                    memory_content = plugin.memories.get_short_term_memory_text()
+                    await value_game.determine_manner_change(memory_content, 0, last_user_text=text)
+                    attitude_prompt = value_game.get_attitude_prompt()
+
+                    # 生成思维分析
+                    prompt, analysis = await plugin.thoughts.generate_person_prompt(
+                        plugin.memories, plugin.cards, attitude_prompt=attitude_prompt
+                    )
 
                 # 生成回复，传递事件上下文以使用流水线配置的模型
                 response = await plugin.generator.generate_response(prompt, ctx=ctx)
+                response = _strip_heart_markers(response)
 
                 # 应用拟人化效果
                 response = await plugin.generator.apply_personification(response)
+                response = _strip_heart_markers(response)
+
+                # 心动值：拼到回复末尾（同一句话发送）
+                if plugin.get_config().get("display_value", False):
+                    response += value_game.get_manner_value_str()
 
                 # 实现打字机效果，分段发送消息
                 await self.send_with_typing_effect(ctx, response)
 
                 # 添加机器人回复到短期记忆
-                response_content = response.split("\n")[0]  # 只保存第一行作为记忆
+                response_content = _strip_heart_markers(response).split("\n")[0]  # 只保存第一行作为记忆
                 await plugin.memories.add_short_term_memory("bot", response_content)
-
-                # 如果开启了好感度显示，显示当前好感度
-                if plugin.get_config().get("display_value", False):
-                    from systems.value_game import ValueGame
-                    # 初始化好感度系统
-                    value_game = ValueGame(plugin)
-                    await value_game.load_config(character, user_id, "person")
-                    # 计算好感度变化
-                    memory_content = plugin.memories.get_short_term_memory_text()
-                    await value_game.determine_manner_change(memory_content, 0)
-                    # 显示好感度
-                    value_text = value_game.get_manner_value_str()
-                    if value_text:
-                        await ctx.reply(
-                            MessageChain([
-                                Plain(text=value_text)
-                            ])
-                        )
-                    # 即使没有变化也显示当前好感度
-                    elif plugin.get_config().get("display_value_always", False):
-                        await ctx.reply(
-                            MessageChain([
-                                Plain(text=f"心动值：{value_game.get_value()}")
-                            ])
-                        )
 
                 # 记忆总结不再由消息触发，而是由短期记忆大小阈值自动触发
                 # 这样可以避免每次消息都调用LLM，减少超时风险
@@ -174,12 +242,11 @@ class OnMessageEventListener(EventListener):
                         # 尝试作为临时解决方案，使用一个默认值
                         group_id = "default_group"
                         logger.warning(f"无法找到群聊ID属性，使用默认值: {group_id}")
-                # 用户名称可能需要通过其他方式获取，暂时使用用户ID作为名称
-                user_name = f"用户{user_id}"
+                user_name = _get_sender_display_name(ctx.event, f"用户{user_id}")
 
                 # 获取消息内容
                 message_chain = ctx.event.message_chain
-                text = "".join([elem.text for elem in message_chain if hasattr(elem, 'text')])
+                text = _extract_plain_text(message_chain)
 
                 if not text:
                     logger.debug("群聊消息内容为空，忽略")
@@ -193,74 +260,59 @@ class OnMessageEventListener(EventListener):
                 # 获取插件实例
                 plugin = self.plugin
 
-                # 忽略特定前缀的消息
-                ignore_prefixes = plugin.get_config().get("ignore_prefix", ["/"])  # 默认忽略以/开头的消息
-                if any(text.startswith(prefix) for prefix in ignore_prefixes):
-                    logger.debug(f"群聊消息以忽略前缀开头，忽略消息: {text}")
-                    return
-
                 logger.info(f"群聊 {group_id} 将处理用户 {user_name} 的消息: {text}")
 
-                # 初始化记忆系统（群聊专用）
-                logger.info(f"初始化群聊 {group_id} 用户 {user_id} 的记忆系统")
-                if not hasattr(plugin.memories, 'user_id') or plugin.memories.user_id != f"group_{group_id}_{user_id}":
-                    await plugin.memories.initialize(user_name, "Waifu", f"group_{group_id}_{user_id}")
-                    logger.info(f"记忆系统初始化完成，当前用户ID: {plugin.memories.user_id}")
+                async with plugin._memory_lock:
+                    ctx.prevent_default()
 
-                # 加载角色卡（群聊版本，更公开得体）
-                character = plugin.get_config().get("group_character", "cute_neko")
-                logger.info(f"群聊将加载角色卡: {character}")
-                await plugin.cards.load_config(character, "group")
-                logger.info(f"群聊角色卡加载完成，角色信息：profile={plugin.cards.get_profile(mode='group')}, background={plugin.cards.get_background(mode='group')}, rules={plugin.cards.get_rules(mode='group')}")
-                logger.info(f"角色卡配置: 用户名称={plugin.cards.get_user_name()}, 助手名称={plugin.cards.get_assistant_name()}")
+                    # 初始化记忆系统（群聊专用）
+                    logger.info(f"初始化群聊 {group_id} 的记忆系统")
+                    group_memory_id = f"group_{group_id}"
+                    if not hasattr(plugin.memories, 'user_id') or plugin.memories.user_id != group_memory_id:
+                        await plugin.memories.initialize("Group", "Waifu", group_memory_id)
+                        logger.info(f"记忆系统初始化完成，当前用户ID: {plugin.memories.user_id}")
 
-                # 添加用户消息到短期记忆，使用用户ID作为发言者名称
-                await plugin.memories.add_short_term_memory(user_name, text)
+                    # 加载角色卡（群聊版本，更公开得体）
+                    character = plugin.get_config().get("group_character", "cute_neko")
+                    logger.info(f"群聊将加载角色卡: {character}")
+                    await plugin.cards.load_config(character, "group")
+                    logger.info(f"群聊角色卡加载完成，角色信息：profile={plugin.cards.get_profile(mode='group')}, background={plugin.cards.get_background(mode='group')}, rules={plugin.cards.get_rules(mode='group')}")
+                    logger.info(f"角色卡配置: 用户名称={plugin.cards.get_user_name()}, 助手名称={plugin.cards.get_assistant_name()}")
 
-                # 生成思维分析
-                prompt, analysis = await plugin.thoughts.generate_group_prompt(
-                    plugin.memories, plugin.cards
-                )
+                    # 添加用户消息到短期记忆，使用用户ID作为发言者名称
+                    await plugin.memories.add_short_term_memory(user_name, text)
+                    await plugin.memories.append_group_chat_log(user_id, user_name, text)
 
-                # 生成回复
-                response = await plugin.generator.generate_response(prompt)
-
-                # 应用拟人化效果
-                response = await plugin.generator.apply_personification(response)
-
-                # 实现打字机效果，分段发送消息
-                await self.send_with_typing_effect(ctx, response)
-
-                # 添加机器人回复到短期记忆
-                await plugin.memories.add_short_term_memory(plugin.cards.get_assistant_name(), response)
-
-                # 如果开启了好感度显示，显示当前好感度
-                if plugin.get_config().get("display_value", False):
                     from systems.value_game import ValueGame
-                    # 初始化好感度系统
                     value_game = ValueGame(plugin)
                     await value_game.load_config(character, f"group_{group_id}_{user_id}", "group")
-                    # 计算好感度变化
                     memory_content = plugin.memories.get_short_term_memory_text()
-                    await value_game.determine_manner_change(memory_content, 0)
-                    # 显示好感度
-                    value_text = value_game.get_manner_value_str()
-                    if value_text:
-                        await ctx.reply(
-                            MessageChain([
-                                Plain(text=value_text)
-                            ])
-                        )
-                    # 即使没有变化也显示当前好感度
-                    elif plugin.get_config().get("display_value_always", False):
-                        await ctx.reply(
-                            MessageChain([
-                                Plain(text=f"心动值：{value_game.get_value()}")
-                            ])
-                        )
+                    await value_game.determine_manner_change(memory_content, 0, last_user_text=text)
+                    attitude_prompt = value_game.get_attitude_prompt()
 
-                # 阻止默认的流水线处理流程，避免重复回复
-                ctx.prevent_default()
+                    # 生成思维分析
+                    prompt, analysis = await plugin.thoughts.generate_group_prompt(
+                        plugin.memories, plugin.cards, attitude_prompt=attitude_prompt
+                    )
+
+                    # 生成回复
+                    response = await plugin.generator.generate_response(prompt)
+                    response = _strip_heart_markers(response)
+
+                    # 应用拟人化效果
+                    response = await plugin.generator.apply_personification(response)
+                    response = _strip_heart_markers(response)
+
+                    # 心动值：按“发言者 user_id”计算，拼到回复末尾（同一句话发送）
+                    if plugin.get_config().get("display_value", False):
+                        response += value_game.get_manner_value_str()
+
+                    # 实现打字机效果，分段发送消息
+                    await self.send_with_typing_effect(ctx, response)
+
+                    # 添加机器人回复到短期记忆
+                    await plugin.memories.add_short_term_memory(plugin.cards.get_assistant_name(), _strip_heart_markers(response))
+                    await plugin.memories.append_group_chat_log(bot_uuid, plugin.cards.get_assistant_name(), _strip_heart_markers(response))
 
                 logger.info(f"群聊 {group_id} 回复用户 {user_name}: {response}")
 
@@ -312,11 +364,6 @@ class OnMessageEventListener(EventListener):
                         Plain(text=segment)
                     ])
                 )
-
-    async def should_respond(self, group_id: str, text: str) -> bool:
-        """判断是否应该在群聊中回复消息"""
-        logger.info(f"should_respond 被调用，group_id: {group_id}, text: {text}")
-        return True  # 总是回复群聊消息
 
     async def should_repeat(self, group_id: str, text: str) -> bool:
         """判断是否应该复读消息"""

@@ -44,19 +44,22 @@ class AffectionCommand(Command):
                     launcher_id = user_id
                 
                 # 加载好感度系统
+                character = plugin.get_config().get("group_character" if is_group else "character", "default")
                 await plugin.value_game.load_config(
-                    character=plugin.get_config().get("character", "default"),
+                    character=character,
                     launcher_id=launcher_id,
                     launcher_type="group" if is_group else "person"
                 )
                 
                 # 获取好感度
                 affection = plugin.value_game.get_value()
+                max_value = plugin.value_game.get_max_value()
                 description = plugin.value_game.get_manner_description()
+                suffix = plugin.value_game.get_manner_value_str()
                 
                 # 返回回复
                 yield CommandReturn(
-                    text=f"{user_name}，你的当前好感度是：{affection}/100\n{description}"
+                    text=f"{user_name}，你的当前心动值是：{affection}/{max_value}\n{suffix}\n{description}"
                 )
                 
                 logger.info(f"用户 {user_name} 查看了好感度: {affection}")
@@ -118,8 +121,9 @@ class AffectionCommand(Command):
                     launcher_id = target_user_id
                 
                 # 加载好感度系统
+                character = plugin.get_config().get("group_character" if is_group else "character", "default")
                 await plugin.value_game.load_config(
-                    character=plugin.get_config().get("character", "default"),
+                    character=character,
                     launcher_id=launcher_id,
                     launcher_type="group" if is_group else "person"
                 )
@@ -127,10 +131,11 @@ class AffectionCommand(Command):
                 # 设置好感度
                 await plugin.value_game.change_manner_value(value - plugin.value_game.get_value())
                 new_affection = plugin.value_game.get_value()
+                max_value = plugin.value_game.get_max_value()
                 
                 # 返回回复
                 yield CommandReturn(
-                    text=f"已将用户 {target_user_id} 的好感度设置为：{new_affection}/100"
+                    text=f"已将用户 {target_user_id} 的好感度设置为：{new_affection}/{max_value}"
                 )
                 
                 logger.info(f"管理员 {user_id} 将用户 {target_user_id} 的好感度设置为: {new_affection}")

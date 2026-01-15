@@ -1,4 +1,5 @@
 import logging
+import asyncio
 from langbot_plugin.api.definition.plugin import BasePlugin
 
 logger = logging.getLogger(__name__)
@@ -18,6 +19,7 @@ class WaifuBotPlugin(BasePlugin):
         self.narrator = None
         self.portrait = None
         self.current_bot_uuid = None  # 保存当前机器人的UUID
+        self._memory_lock = asyncio.Lock()
         
     async def initialize(self):
         """插件加载时调用"""
@@ -25,7 +27,10 @@ class WaifuBotPlugin(BasePlugin):
         
         # 获取插件配置
         self.config = self.get_config()
-        logger.info(f"插件配置: {self.config}")
+        safe_config = self.config.copy() if isinstance(self.config, dict) else {}
+        if "api_key" in safe_config:
+            safe_config["api_key"] = "***"
+        logger.info(f"插件配置已加载: keys={list(safe_config.keys())}")
         
         # 初始化各个模块
         try:

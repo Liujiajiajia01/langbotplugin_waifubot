@@ -17,6 +17,8 @@ class Memory:
         self.short_term_memory = []
         self.long_term_memories = []
         self.session_memories = []
+        self.group_chat_log = []
+        self.group_chat_log_max_entries = 5000
         
         # 最新情感状态（供其他模块使用）
         self.current_emotion_score = 0.0
@@ -75,7 +77,37 @@ class Memory:
         
         # 加载长期记忆
         await self.load_long_term_memories()
+
+        if self.user_id.startswith("group_"):
+            await self.load_group_chat_log()
+            self.short_term_memory = []
+            for item in self.group_chat_log[-200:]:
+                speaker = str(item.get("speaker_name", "") or "")
+                content = str(item.get("content", "") or "")
+                if speaker and content:
+                    self.short_term_memory.append({
+                        "speaker": speaker,
+                        "content": content,
+                        "timestamp": float(item.get("timestamp", time.time()) or time.time()),
+                        "emotion_score": 0.0,
+                        "emotion_type": "neutral"
+                    })
+
         logger.info("记忆系统初始化完成")
+    
+    async def save_long_term_memories(self):
+        """
+        保存长期记忆到文件
+        """
+        try:
+            memory_key = f"long_term_memories_{self.user_id}"
+            memory_data = json.dumps(self.long_term_memories, ensure_ascii=False).encode("utf-8")
+            await self.plugin.set_plugin_storage(memory_key, memory_data)
+            
+            logger.info(f"保存了 {len(self.long_term_memories)} 条长期记忆到插件存储: {memory_key}")
+        except Exception as e:
+            logger.error(f"保存长期记忆失败: {e}", exc_info=True)
+            return
     
     async def load_long_term_memories(self):
         """
@@ -86,77 +118,16 @@ class Memory:
             memory_data = await self.plugin.get_plugin_storage(memory_key)
             if memory_data:
                 self.long_term_memories = json.loads(memory_data.decode("utf-8"))
-                logger.info(f"加载了 {len(self.long_term_memories)} 条长期记忆")
+                logger.info(f"加载了 {len(self.long_term_memories)} 条长期记忆: {memory_key}")
             else:
                 logger.info("没有找到长期记忆，将使用空记忆列表")
                 self.long_term_memories = []
         except Exception as e:
-            # 如果是存储键未找到的错误，优雅处理
             if "Storage with key" in str(e) and "not found" in str(e):
                 logger.info("首次使用，尚未创建长期记忆存储")
                 self.long_term_memories = []
             else:
                 logger.error(f"加载长期记忆失败: {e}", exc_info=True)
-                self.long_term_memories = []
-    
-    async def save_long_term_memories(self):
-        """
-        保存长期记忆到文件
-        """
-        try:
-            # 创建用户ID对应的文件夹
-            import os
-            user_id = self.user_id.replace("group_", "")  # 移除group_前缀，统一用户ID
-            memory_dir = f"data/memories/{user_id}"
-            os.makedirs(memory_dir, exist_ok=True)
-            
-            # 保存长期记忆到JSON文件
-            memory_file = os.path.join(memory_dir, "long_term_memories.json")
-            with open(memory_file, "w", encoding="utf-8") as f:
-                json.dump(self.long_term_memories, f, ensure_ascii=False, indent=4)
-            
-            logger.info(f"保存了 {len(self.long_term_memories)} 条长期记忆到 {memory_file}")
-        except Exception as e:
-            logger.error(f"保存长期记忆失败: {e}", exc_info=True)
-            # 回退到使用插件存储
-            try:
-                memory_key = f"long_term_memories_{self.user_id}"
-                memory_data = json.dumps(self.long_term_memories).encode("utf-8")
-                await self.plugin.set_plugin_storage(memory_key, memory_data)
-                logger.info(f"回退到插件存储，保存了 {len(self.long_term_memories)} 条长期记忆")
-            except Exception as backup_e:
-                logger.error(f"回退到插件存储也失败了: {backup_e}", exc_info=True)
-    
-    async def load_long_term_memories(self):
-        """
-        从文件加载长期记忆
-        """
-        try:
-            # 尝试从文件加载
-            import os
-            user_id = self.user_id.replace("group_", "")  # 移除group_前缀，统一用户ID
-            memory_file = f"data/memories/{user_id}/long_term_memories.json"
-            
-            if os.path.exists(memory_file):
-                with open(memory_file, "r", encoding="utf-8") as f:
-                    self.long_term_memories = json.load(f)
-                logger.info(f"从 {memory_file} 加载了 {len(self.long_term_memories)} 条长期记忆")
-            else:
-                self.long_term_memories = []
-                logger.info("没有找到长期记忆文件，开始新的记忆")
-        except Exception as e:
-            logger.error(f"从文件加载长期记忆失败: {e}", exc_info=True)
-            # 回退到使用插件存储
-            try:
-                memory_key = f"long_term_memories_{self.user_id}"
-                memory_data = await self.plugin.get_plugin_storage(memory_key)
-                if memory_data:
-                    self.long_term_memories = json.loads(memory_data.decode("utf-8"))
-                    logger.info(f"回退到插件存储，加载了 {len(self.long_term_memories)} 条长期记忆")
-                else:
-                    self.long_term_memories = []
-            except Exception as backup_e:
-                logger.error(f"回退到插件存储也失败了: {backup_e}", exc_info=True)
                 self.long_term_memories = []
     
     async def add_short_term_memory(self, speaker: str, content: str):
@@ -187,21 +158,57 @@ class Memory:
         total_length = self._calc_short_term_memory_size()
         logger.info(f"当前短期记忆大小: {total_length} 字符, 允许最大值: {self.short_term_memory_size} 字符")
         
-        # 确保重要信息（如用户的穿着、喜好等）能够被及时总结
-        # 检查最新的用户消息是否包含重要信息关键词
+        if self.user_id.startswith("group_"):
+            if total_length >= self.short_term_memory_size:
+                self._drop_short_term_memory(max(50, len(self.short_term_memory) // 2))
+            logger.debug(f"添加短期记忆: {speaker} - {content} [情感: {emotion_type}, 分数: {emotion_score:.2f}]")
+            return
+
+        should_summarize = False
         if speaker == "user" and any(keyword in content for keyword in ["穿", "衣服", "颜色", "喜欢", "爱好", "生日", "年龄"]):
-            logger.info(f"检测到重要信息，提前总结长期记忆: {content}")
-            await self.summarize_long_term_memory()
-        elif total_length > self.short_term_memory_size:
-            logger.info("短期记忆超过限制，总结长期记忆")
-            await self.summarize_long_term_memory()
-        
-        # 只在短期记忆达到阈值时才进行总结，避免每次消息都调用LLM
+            should_summarize = True
         if total_length >= self.short_term_memory_size:
-            logger.info("短期记忆达到阈值，开始总结为长期记忆")
-            await self.summarize_long_term_memory()  # 同步执行总结
+            should_summarize = True
+
+        if should_summarize:
+            logger.info("触发长期记忆总结")
+            await self.summarize_long_term_memory()
         
         logger.debug(f"添加短期记忆: {speaker} - {content} [情感: {emotion_type}, 分数: {emotion_score:.2f}]")
+
+    async def load_group_chat_log(self):
+        try:
+            memory_key = f"group_chat_log_{self.user_id}"
+            memory_data = await self.plugin.get_plugin_storage(memory_key)
+            if memory_data:
+                self.group_chat_log = json.loads(memory_data.decode("utf-8"))
+            else:
+                self.group_chat_log = []
+        except Exception as e:
+            if "Storage with key" in str(e) and "not found" in str(e):
+                self.group_chat_log = []
+            else:
+                logger.error(f"加载群聊聊天记录失败: {e}", exc_info=True)
+                self.group_chat_log = []
+
+    async def append_group_chat_log(self, speaker_id: str, speaker_name: str, content: str):
+        if not self.user_id.startswith("group_"):
+            return
+        item = {
+            "speaker_id": str(speaker_id),
+            "speaker_name": str(speaker_name),
+            "content": str(content),
+            "timestamp": time.time(),
+        }
+        self.group_chat_log.append(item)
+        if len(self.group_chat_log) > self.group_chat_log_max_entries:
+            self.group_chat_log = self.group_chat_log[-self.group_chat_log_max_entries:]
+        try:
+            memory_key = f"group_chat_log_{self.user_id}"
+            memory_data = json.dumps(self.group_chat_log, ensure_ascii=False).encode("utf-8")
+            await self.plugin.set_plugin_storage(memory_key, memory_data)
+        except Exception as e:
+            logger.error(f"保存群聊聊天记录失败: {e}", exc_info=True)
     
     def _analyze_emotion(self, text: str) -> Tuple[float, str]:
         """
@@ -219,7 +226,7 @@ class Memory:
         # 统计各类情感关键词的出现次数
         for emotion, keywords in self.emotion_keywords.items():
             for keyword in keywords:
-                emotion_counts[emotion] += len(re.findall(r'\b' + re.escape(keyword) + r'\b', text_lower))
+                emotion_counts[emotion] += text_lower.count(keyword)
         
         # 计算情感分数
         total = sum(emotion_counts.values())
@@ -637,8 +644,7 @@ class Memory:
         获取短期记忆文本
         :return: 短期记忆文本
         """
-        # 保留更多短期记忆，增加最大长度
-        max_length = 3000  # 增加到3000字符以内
+        max_length = 8000 if self.user_id.startswith("group_") else 3000
         memory_text = ""
         
         # 从最新的记忆开始添加
@@ -698,6 +704,9 @@ class Memory:
         try:
             memory_key = f"long_term_memories_{self.user_id}"
             await self.plugin.delete_plugin_storage(memory_key)
+            if self.user_id.startswith("group_"):
+                group_key = f"group_chat_log_{self.user_id}"
+                await self.plugin.delete_plugin_storage(group_key)
             logger.info("所有记忆已清除")
         except Exception as e:
             logger.error(f"清除记忆失败: {e}", exc_info=True)

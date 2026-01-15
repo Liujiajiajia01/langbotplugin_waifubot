@@ -60,7 +60,7 @@ class Thoughts:
         analysis_result = await self._generator.generate_response(user_prompt)
         return analysis_result.strip()
 
-    async def generate_person_prompt(self, memory, card) -> Tuple[str, str]:
+    async def generate_person_prompt(self, memory, card, attitude_prompt: str = "") -> Tuple[str, str]:
         """
         生成私信提示
         :param memory: 记忆系统实例
@@ -108,6 +108,9 @@ class Thoughts:
         # 构建最终提示
         prompt = f"角色设定：{profile} {background}\n"
         prompt += f"行为准则：{manner}\n"
+        if attitude_prompt:
+            prompt += f"当前语气要求：{attitude_prompt}\n"
+        prompt += "回复内容不要包含任何心动值/好感度数值，也不要输出类似（数字❤️/🖤）的格式，系统会自动追加。\n"
         prompt += f"对话历史：\n{conversation_str}\n"
         if analysis:
             prompt += f"思考分析：{analysis}\n"
@@ -115,7 +118,7 @@ class Thoughts:
         
         return prompt, analysis
 
-    async def generate_group_prompt(self, memory, card) -> Tuple[str, str]:
+    async def generate_group_prompt(self, memory, card, attitude_prompt: str = "") -> Tuple[str, str]:
         """
         生成群聊提示
         :param memory: 记忆系统实例
@@ -130,7 +133,7 @@ class Thoughts:
             return "", ""
             
         # 获取最近的对话内容
-        recent_conversations = conversations[-5:]  # 最近5条消息
+        recent_conversations = conversations[-20:]  # 最近20条消息
         conversation_str = "\n".join([f"{msg['speaker']}: {msg['content']}" for msg in recent_conversations])
         
         # 获取角色信息
@@ -144,6 +147,9 @@ class Thoughts:
         prompt += "你现在在群聊中，需要保持友好、得体的发言风格。\n"
         prompt += "回答要简洁明了，避免过于私人化的内容。\n"
         prompt += "如果有人@你，要礼貌回应；如果是群聊氛围活跃，可以适当参与讨论。\n"
+        if attitude_prompt:
+            prompt += f"当前语气要求：{attitude_prompt}\n"
+        prompt += "回复内容不要包含任何心动值/好感度数值，也不要输出类似（数字❤️/🖤）的格式，系统会自动追加。\n"
         prompt += f"对话历史：\n{conversation_str}\n"
         prompt += f"请以{card.get_assistant_name()}的身份回复用户。"
         
