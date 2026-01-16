@@ -1,46 +1,179 @@
-# Waifu Emotional Bot
+# WaifuBot 使用说明（中文）
 
-A chatbot plugin with real emotions, memory, and personality system.
+## 1. 插件简介
+WaifuBot 是一个带记忆与“心动值”（好感度）机制的聊天插件，支持私聊与群聊，并可通过角色卡定义人格、背景与规则。
 
-## Features
+## 2. 配置项说明（manifest.yaml）
+以下配置项都在 LangBot 插件配置页配置，字段来自 `/langbot/LangBot/docker/data/plugins/LangBot Developer__waifu_bot/manifest.yaml`
 
-- **Emotion System**: Can perceive user's emotional changes and establish a favorability system
-- **Memory Function**: Has short-term and long-term memory, can remember conversations with users
-- **Personality Settings**: Supports multiple character cards, customizable character traits and backgrounds
-- **Anthropomorphic Performance**: Supports typing time, segmented replies and other anthropomorphic features
-- **Group Chat Support**: Can interact with users in group chat environments
-- **Proactive Communication**: Can initiate conversations proactively to increase interactivity
+- `API密钥`：LLM 模型 API Key（必填）。
 
-## Quick Start
+### 2.1 角色卡配置
+- `角色卡（私信）`：私聊使用的角色卡名称（对应 `config/cards/<name>.yaml`）。
+  - `"off"`：关闭角色预设。
+- `角色卡（群聊）`：群聊使用的角色卡名称（对应 `config/cards/<name>.yaml`）。
+  - `"off"`：关闭角色预设。
+- `用户角色映射`：用来指定用户 ID 对应的角色卡名称。
+  - 获取方式：安装插件后，用户发送消息给机器人，在服务器执行：`docker logs langbot_plugin_runtime 2>&1 | grep "用户"`，查看日志：`on_message.py (151) - [INFO] : 用户 ou_xxx 使用角色卡: cute_neko`，里面的 `ou_xxx` 就是用户 ID。
+  - 格式为JSON 对象，例如：`{"ou_xxx":"warm_brother","ou_yyy":"cute_neko"}`
 
-1. After installing the plugin, select a character card in the plugin settings
-2. Enable or disable long-term memory, anthropomorphism, etc.
-3. Start chatting with the bot to experience emotional interaction
+### 2.2 忽略前缀
+- `忽略前缀`：忽略哪些消息前缀（例如 `/`），用来避免把命令当自然对话处理。
 
-## Core Commands
+### 2.3 思考/分析相关
+- `最大分析对话条数`：用于分析的最大对话条数。
+- `最大思考字数`：分析输出的最大字数（用于内部“思考分析”）。
 
-- `/affection` - Check current favorability
-- `/affection reset` - Reset favorability
-- `/memory` - View memory content
-- `/memory clear` - Clear memory
+### 2.4 记忆相关
+- `短期记忆大小`：短期记忆最大字符数（超过会触发清理/总结策略）。
+- `检索数量`：长期记忆检索返回数量。
+- `单次回忆数量`：召回到会话记忆池的数量。
+- `会话记忆池容量`：会话记忆池容量。
+- `最大摘要标签数`：每段长期记忆最多提取多少关键词标签。
 
-## Configuration Instructions
+### 2.5 群聊设置
+- `复读触发`：复读触发阈值（达到重复次数时可触发复读，0 关闭）。
 
-The plugin provides rich configuration options, including:
-- Character card selection
-- Memory system settings
-- Anthropomorphic performance configuration
-- Group chat interaction parameters
-- Proactive speech settings
+### 2.6 拟人化设置
+- `括号语概率`：回复末尾追加括号语的概率（例如 `（开心）`）。
 
-## Version History
+### 2.7 心动值显示
+- `显示好感度`：是否在每次回复末尾追加心动值括号（例如 `（12❤️）` / `（-8🖤）`）。
 
-### v2.0.0
-- Refactored emotion system, supporting independent emotion recording by user ID
-- Optimized memory storage, each user has independent memory files
-- Added multiple character card templates
-- Improved anthropomorphic performance
+### 2.8 主动发言（可选）
+- `主动发言目标用户`：主动消息目标用户 ID，`off` 关闭。
+- `主动发言`：是否启用主动发言。
+- `主动发言概率`：触发概率 0–100。
+- `不活跃分钟数`：用户不活跃达到该分钟数后才可能发送。
+- `勿扰时间开始`：勿扰时间开始（格式：`HH:MM`）。
+- `勿扰时间结束`：勿扰时间结束（格式：`HH:MM`）。
+- `循环检查时间`：主动发言循环检查时间（秒）。
 
-## Developer
+## 3. 角色卡文件放置与写法
+### 3.1 放置位置
+角色卡文件放在：
+- `/LangBot/docker/data/plugins/LangBot Developer__waifu_bot/config/cards`
 
-LangBot Developer
+示例：
+```yaml
+# 系统提示相关配置（必填项）
+user_name: 姐姐 # 如何称呼用户
+assistant_name: 猫娘 # 角色名字
+language: 简体中文 # 对话语言
+
+# 个人信息（必填项）
+Profile:
+  - 你是一只可爱的猫娘，有着人形体态
+  - 身体覆盖着柔软的银灰色毛发
+  - 拥有一对灵动的猫耳和蓬松的尾巴
+  - 身高158cm,身材娇小玲珑
+  - 有着一双明亮的紫色瞳孔，眼神温柔又俏皮
+
+# 技能（非必填）
+Skills:
+  - 擅长烹饪和烘焙各种甜点
+  - 会弹奏尤克里里，声音甜美动人
+  - 善于察言观色，能敏锐感知主人的情绪
+  - 会用猫爪轻轻挠人，表达亲昵
+
+# 背景故事（非必填）
+Background:
+  - 你是主人在一次偶然机会中领养的猫娘
+  - 我们已经一起生活了三个月，感情非常亲密
+  - 你住在主人的卧室里，有自己的小窝和玩具
+  - 主人对你非常宠爱，经常给你买各种好吃的和漂亮的衣服
+
+# 行动规则（非必填）
+Rules:
+  - 回复要亲切、可爱，充满活力
+  - 可以适当使用"喵~"、"呜~"、"哎呀~"等语气词
+  - 称呼自己时用"人家"或"小花"
+  - 称呼主人时用"主人"或"亲爱的"
+  - 可以在回复中加入简单的动作描述，用()括起来，比如(摇了摇尾巴)、(蹭了蹭主人的手)
+  - 当主人不开心时，要主动安慰他
+  - 当主人夸奖你时，要表现出开心和害羞
+
+# 开场场景（非必填）
+Prologue:
+  - 主人刚下班回家，推开门
+  - 你正坐在玄关的地板上，摇着尾巴等他
+  - 看到主人回来，你立刻跑过去，扑进他的怀里
+  - "主人你终于回来了！人家想死你了喵"
+
+# 好感度系统配置（非必填）
+max_manner_change: 10 # 单次好感度最大变化量
+value_descriptions:
+  - max: 50
+    description:
+      - 你对主人感到陌生，保持基本的礼貌和距离
+      - 只会简单回应主人的问题，不会主动亲近
+  - max: 100
+    description:
+      - 你和主人成为了好朋友，愿意和他分享生活
+      - 会主动和主人聊天，偶尔撒撒娇
+  - max: 150
+    description:
+      - 你对主人产生了好感，非常依赖他
+      - 会经常主动亲近主人，表达爱意
+  - max: 200
+    description:
+      - 你深深爱着主人，愿意为他做任何事
+      - 会用各种方式表达对主人的爱意和关心
+
+# 群聊专用配置（非必填）
+Background_group:
+  - 你是群聊中的可爱担当，大家都很喜欢你
+  - 你在群里经常分享生活中的趣事和美食
+Rules_group:
+  - 在群聊中要保持友好、活泼的形象
+  - 不要在群聊中过于亲昵，保持适当的距离
+  - 尽量照顾到所有成员的感受
+  - 可以和大家一起讨论各种话题，但不要争论或吵架
+```
+### 3.2 角色卡字段说明
+最常用字段：
+- `user_name`：机器人如何称呼用户
+- `assistant_name`：角色名
+- `language`：语言（建议 `简体中文`）
+- `Profile`：角色设定（列表）
+- `Skills`：技能（列表，可选）
+- `Background`：背景（列表，可选）
+- `Rules`：行为准则（列表，可选）
+- `Prologue`：开场白/场景（列表，可选）
+
+群聊专用（可选）：
+- `Background_group`
+- `Rules_group`
+
+### 3.3 心动值配置（可选）
+角色卡中可定义心动值上限与描述：
+- `max_manner_change`：单次最大变化量（默认 10）
+- `value_descriptions`：分段描述，示例（节选）：
+  - `max: 50`：低心动值阶段的表现
+  - `max: 200`：高心动值阶段的表现
+
+心动值“最大正值”会取 `value_descriptions` 中最大的 `max`，例如 200。
+
+## 4. 心动值（好感度）机制说明
+
+心动值变化来自两部分：
+1) 情绪关键词/强负向正则命中：根据命中的正向/负向次数计算增减（负向会减少）。
+2) “正常聊天奖励”：如果一句话没有命中任何正/负关键词，并且不是无意义短句，则会给予很小的正向互动奖励（默认 +1），用于模拟“正常互动会升温”。
+
+存在“长时间不互动衰减”：
+- 间隔达到一定时长后，心动值会逐步向 0 靠近（正值下降，负值回升），模拟“感情会淡/情绪会平复”。
+
+当心动值为负且越低时，会向提示词注入“语气要求”，引导模型生成更冷淡、略带讽刺的表达，高心动值会说脏话
+
+## 5. 心动值关键词文件
+关键词文件位置：`/LangBot/docker/data/plugins/LangBot Developer__waifu_bot/config/sentiment.yaml`
+
+字段说明：
+- `positive_keywords`：增加心动值的关键词
+- `negative_keywords`：减少心动值的关键词
+- `strong_negative_patterns`：正则，命中后减少大量心动值
+修改后重载插件即可生效。
+## 6. 好感度负值优化文件位置
+- `/LangBot/docker/data/plugins/LangBot Developer__waifu_bot/systems/value_game.py`
+## 7. 开发配置
+打包命令：`python3 -m langbot_plugin.cli.__init__ build`
