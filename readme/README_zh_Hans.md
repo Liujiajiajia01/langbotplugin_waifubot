@@ -1,7 +1,7 @@
 # WaifuBot 使用说明（中文）
 
 ## 1. 插件简介
-WaifuBot 是一个带记忆与“心动值”（好感度）机制的聊天插件，支持私聊与群聊，并可通过角色卡定义人格、背景与规则。
+WaifuBot 是一个带记忆与“心动值”（好感度）机制的LangBot聊天插件，支持私聊与群聊，并可通过角色卡定义人格、背景与规则。LangBot官网：https://langbot.app/
 
 ## 2. 配置项说明（manifest.yaml）
 以下配置项都在 LangBot 插件配置页配置，字段来自 `/langbot/LangBot/docker/data/plugins/LangBot Developer__waifu_bot/manifest.yaml`
